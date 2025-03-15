@@ -6,6 +6,9 @@ const auth = require("../middleware/auth.js");
 const walletService = require("../services/wallet.js");
 const authService = require("../services/auth.js");
 const service = require("../services/blockchain.js");
+const Listing = require('../models/listing');
+const Web3 = require("web3");
+const web3 = new Web3();
 
 // /**
 //  * @swagger
@@ -476,6 +479,561 @@ router.post("/receipt", async (req, res) => {
   }
 });
 
-// signTransaction
+/**
+ * @swagger
+ * /blockchain/marketplace/mint:
+ *   post:
+ *     summary: Mint an NFT for given collection
+ *     description: Mint an NFT for given collection
+ *     tags:
+ *       - blockchain
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               tokenAddress:
+ *                 type: string
+ *                 description: NFT contract address
+ *                 example: "0x1234567890abcdef1234567890abcdef12345678"
+ *               tokenUri:
+ *                 type: string
+ *                 description: IPFS Metadata Url
+ *     responses:
+ *       200:
+ *         description: Successfully minted NFT.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   description: Transaction receipt details.
+ *                   properties:
+ *                     transactionHash:
+ *                       type: string
+ *                       description: The transaction hash.
+ *                       example: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+ *       404:
+ *         description: Mint Transaction failed.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: failed
+ *                 message:
+ *                   type: string
+ *                   example: "Problem while initiating Minting NFT"
+ *
+ *
+ */
+router.post("/marketplace/mint", auth, async (req, res) => {
+  try {
+    let accessToken = req.token;
+
+    let tokenAddress = req.body.tokenAddress;
+
+    let paytokenAddress = process.env.WFTM_ADDRESS;
+
+    let tokenUri = req.body.tokenUri;
+
+    let secureChannelRes = await authService.createSecureChannel();
+    const encryptedDevicePassword = authService.encrypt(
+      secureChannelRes,
+      DEVICE_PASSWORD
+    );
+
+    let walletData = await walletService.getWallet(accessToken);
+    let email = walletData.email;
+    let owner = walletData.address;
+
+    walletData = await walletService.createWallet(
+      email,
+      encryptedDevicePassword,
+      secureChannelRes.ChannelID,
+      accessToken
+    );
+
+    // Check balance
+    let balance = await service.getTokenBalance(owner, paytokenAddress);
+    let platformFee = await service.getPlatformFee(tokenAddress);
+    balance = web3.utils.fromWei(balance, "ether")
+    platformFee = web3.utils.fromWei(platformFee, "ether")
+    console.log(balance, platformFee);
+    if(parseFloat(balance) < parseFloat(platformFee)) {
+      return res.status(404).json({ status: "failed", message: "Insufficient DT balance for Platform Fee. Required "+platformFee+" DT Tokens" });
+    }
+
+    let isApproved = await service.isERC20Approved(owner, tokenAddress, paytokenAddress);
+    console.log(isApproved);
+    if(!isApproved) {
+      let approved = await service.approveERC20(tokenAddress, paytokenAddress, accessToken, secureChannelRes, walletData);
+      if(!approved) {
+        return res.status(404).json({ status: "failed", message: "Problem while approving ERC20" });
+      }
+    }
+
+    let receipt = await service.mintNFT(paytokenAddress, tokenAddress, tokenUri, accessToken, secureChannelRes, walletData);
+
+    return res.status(200).json({ status: "success", data: { transactionHash: receipt.transactionHash } });
+  } catch (err) {
+    logger.error(err.message);
+    return res
+      .status(404)
+      .json({
+        status: "failed",
+        message: "Problem while sending Transaction status for mint NFT",
+      });
+  }
+});
+
+/**
+ * @swagger
+ * /blockchain/marketplace/sell:
+ *   post:
+ *     summary: Approve NFT and List NFT for Sale
+ *     description: Approve NFT and List NFT for Sale
+ *     tags:
+ *       - blockchain
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               tokenAddress:
+ *                 type: string
+ *                 description: NFT contract address
+ *                 example: "0x1234567890abcdef1234567890abcdef12345678"
+ *               tokenId:
+ *                 type: number
+ *                 description: NFT token ID
+ *                 example: 1
+ *               price:
+ *                 type: number
+ *                 description: Price of NFT in DT tokens
+ *                 example: 1
+ *     responses:
+ *       200:
+ *         description: Successfully initiated Sell Transaction.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   description: Transaction receipt details.
+ *                   properties:
+ *                     transactionHash:
+ *                       type: string
+ *                       description: The transaction hash.
+ *                       example: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+ *       404:
+ *         description: Sell Transaction failed.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: failed
+ *                 message:
+ *                   type: string
+ *                   example: "Problem while initiating Sell Transaction"
+ *
+ *
+ */
+router.post("/marketplace/sell", auth, async (req, res) => {
+  try {
+
+    let accessToken = req.token;
+
+    let tokenAddress = req.body.tokenAddress;
+    let tokenId = req.body.tokenId;
+    let price = isNaN(req.body.price) ? "0": req.body.price.toString();
+
+    if(price == "0") {
+      return res.status(429).json({ status: "failed", message: "Invalid price" });
+    }
+
+    let paytokenAddress = process.env.WFTM_ADDRESS;
+
+    let operator = process.env.MARKETPLACE_ADDRESS;
+
+    let secureChannelRes = await authService.createSecureChannel();
+    const encryptedDevicePassword = authService.encrypt(
+      secureChannelRes,
+      DEVICE_PASSWORD
+    );
+
+    let walletData = await walletService.getWallet(accessToken);
+    let email = walletData.email;
+    let owner = walletData.address;
+
+    walletData = await walletService.createWallet(
+      email,
+      encryptedDevicePassword,
+      secureChannelRes.ChannelID,
+      accessToken
+    );
+
+    let isApproved = await service.isNFTApproved(tokenId, operator, tokenAddress);
+    if(!isApproved) {
+      let approved = await service.approveNFT(tokenId, operator, tokenAddress, owner, accessToken, secureChannelRes, walletData);
+      if(!approved) {
+        return res.status(429).json({ status: "failed", message: "Problem while approving NFT" });
+      }
+    }
+
+    let receipt = await service.sellNFT(tokenId, price, paytokenAddress, tokenAddress, owner, accessToken, secureChannelRes, walletData);
+
+    return res.status(200).json({ status: "success", data: { transactionHash: receipt.transactionHash } });
+  } catch (err) {
+    logger.error(err.message);
+    return res
+      .status(404)
+      .json({
+        status: "failed",
+        message: "Problem while selling NFT",
+      });
+  }
+});
+
+/**
+ * @swagger
+ * /blockchain/marketplace/buy:
+ *   post:
+ *     summary: Approve Pay tokens and Buy NFT
+ *     description: Approve Pay tokens and Buy NFT
+ *     tags:
+ *       - blockchain
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               tokenAddress:
+ *                 type: string
+ *                 description: NFT contract address
+ *                 example: "0x1234567890abcdef1234567890abcdef12345678"
+ *               tokenId:
+ *                 type: number
+ *                 description: NFT token ID
+ *                 example: 1
+ *     responses:
+ *       200:
+ *         description: Successfully initiated Sell Transaction.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   description: Transaction receipt details.
+ *                   properties:
+ *                     transactionHash:
+ *                       type: string
+ *                       description: The transaction hash.
+ *                       example: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+ *       404:
+ *         description: Sell Transaction failed.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: failed
+ *                 message:
+ *                   type: string
+ *                   example: "Problem while initiating Sell Transaction"
+ *
+ *
+ */
+router.post("/marketplace/buy", auth, async (req, res) => {
+  try {
+    let accessToken = req.token;
+
+    let tokenAddress = req.body.tokenAddress;
+    let tokenId = req.body.tokenId;
+
+    let paytokenAddress = process.env.WFTM_ADDRESS;
+
+    let operator = process.env.MARKETPLACE_ADDRESS;
+
+    let secureChannelRes = await authService.createSecureChannel();
+    const encryptedDevicePassword = authService.encrypt(
+      secureChannelRes,
+      DEVICE_PASSWORD
+    );
+
+    let walletData = await walletService.getWallet(accessToken);
+    let email = walletData.email;
+    let owner = walletData.address;
+
+    walletData = await walletService.createWallet(
+      email,
+      encryptedDevicePassword,
+      secureChannelRes.ChannelID,
+      accessToken
+    );
+
+    let listings = await Listing.find({
+      minter: tokenAddress,
+      tokenID: parseInt(tokenId)
+    });
+    if(listings.length == 0) {
+      return res.status(404).json({ status: "failed", message: "Listing not found" });
+    }
+    let price = listings[0].price;
+
+    // Check balance
+    let balance = await service.getTokenBalance(owner, paytokenAddress);
+    console.log(balance);
+    balance = web3.utils.fromWei(balance, "ether")
+    if(parseFloat(balance) < parseFloat(price)) {
+      return res.status(404).json({ status: "failed", message: "Insufficient balance" });
+    }
+
+    let isApproved = await service.isERC20Approved(owner, operator, paytokenAddress);
+    console.log(isApproved);
+    if(!isApproved) {
+      let approved = await service.approveERC20(operator, paytokenAddress, accessToken, secureChannelRes, walletData);
+      if(!approved) {
+        return res.status(404).json({ status: "failed", message: "Problem while approving ERC20" });
+      }
+    }
+
+    let receipt = await service.buyNFT(tokenId, paytokenAddress, tokenAddress, accessToken, secureChannelRes, walletData);
+
+    return res.status(200).json({ status: "success", data: { transactionHash: receipt.transactionHash } });
+  } catch (err) {
+    logger.error(err.message);
+    return res
+      .status(404)
+      .json({
+        status: "failed",
+        message: "Problem while sending Transaction status",
+      });
+  }
+});
+
+/**
+ * @swagger
+ * /blockchain/ft/balance/dt:
+ *   get:
+ *     summary: Get DT Token Balance
+ *     description: Get DT Token Balance
+ *     tags:
+ *       - blockchain
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Successfully initiated Sell Transaction.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   description: Transaction receipt details.
+ *                   properties:
+ *                     balance:
+ *                       type: string
+ *                       description: Balance in wei.
+ *                     units:
+ *                       type: string
+ *                       description: Units of balance.
+ *                       example: wei
+ *       404:
+ *         description: Problem while fetching balance.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: failed
+ *                 message:
+ *                   type: string
+ *                   example: "Problem while fetching balance"
+ *
+ *
+ */
+router.get("/ft/balance/dt", auth, async (req, res) => {
+  try {
+    let accessToken = req.token;
+    let walletData = await walletService.getWallet(accessToken);
+    let address = walletData.address;
+    let tokenAddress = process.env.WFTM_ADDRESS;
+
+    let balance = await service.getTokenBalance(address, tokenAddress);
+    return res.status(200).json({ status: "success", data: { balance, units: 'wei' } });
+  } catch (err) {
+    logger.error(err.message);
+    return res.status(404).json({ status: "failed" });
+  }
+});
+
+/**
+ * @swagger
+ * /blockchain/nft/{tokenAddress}/platformfee:
+ *   get:
+ *     summary: Get NFT Platform fee
+ *     description: Get NFT Platform fee
+ *     tags:
+ *       - blockchain
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: tokenAddress
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The NFT tokenAddress address.
+ *     responses:
+ *       200:
+ *         description: Successfully fetched Platform fee.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   description: Platform fee details.
+ *                   properties:
+ *                     platformfee:
+ *                       type: string
+ *                       description: Platform fee in wei.
+ *                     units:
+ *                       type: string
+ *                       description: Units of balance.
+ *                       example: wei
+ *       404:
+ *         description: Problem while fetching balance.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: failed
+ *                 message:
+ *                   type: string
+ *                   example: "Problem while fetching balance"
+ *
+ *
+ */
+router.get("/nft/:tokenAddress/platformfee", auth, async (req, res) => {
+  try {
+    let tokenAddress = req.params.tokenAddress;
+
+    let platformFee = await service.getPlatformFee(tokenAddress);
+    return res.status(200).json({ status: "success", data: { platformFee, units: 'wei' } });
+  } catch (err) {
+    logger.error(err.message);
+    return res.status(404).json({ status: "failed" });
+  }
+});
+
+/**
+ * @swagger
+ * /blockchain/marketplace/platformfee:
+ *   get:
+ *     summary: Get Marketplace Platform fee
+ *     description: Get Marketplace Platform fee
+ *     tags:
+ *       - blockchain
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Successfully fetched Platform fee.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: object
+ *                   description: Platform fee details.
+ *                   properties:
+ *                     platformfee:
+ *                       type: string
+ *                       description: Platform fee in wei.
+ *                     units:
+ *                       type: string
+ *                       description: Units of balance.
+ *                       example: wei
+ *       404:
+ *         description: Problem while fetching platform fee.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: failed
+ *                 message:
+ *                   type: string
+ *                   example: "Problem while fetching platform fee"
+ *
+ *
+ */
+router.get("/marketplace/platformfee", auth, async (req, res) => {
+  try {
+    let marketplaceAddress = process.env.MARKETPLACE_ADDRESS;
+
+    let platformFee = await service.getMarketplacePlatformFee(marketplaceAddress);
+    return res.status(200).json({ status: "success", data: { platformFee, units: 'wei' } });
+  } catch (err) {
+    logger.error(err.message);
+    return res.status(404).json({ status: "failed" });
+  }
+});
 
 module.exports = router;
