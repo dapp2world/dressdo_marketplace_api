@@ -815,13 +815,6 @@ const selectBundles = async (req, res) => {
  *                 type: number
  *                 description: The number of NFT tokens to retrieve in a single request.
  *                 example: 10
- *               category:
- *                 type: array
- *                 description: List of category IDs
- *                 items:
- *                   type: number
- *                   description: Category ID
- *                   example: 1
  *               address:
  *                 type: string
  *                 description: Wallet address
@@ -1157,32 +1150,32 @@ router.post('/getSingleItemDetails', async (req, res) => {
     });
     await Promise.all(historyPromise);
     // more from this collection
-    let nfts = await NFTITEM.find({
-      contractAddress: contractAddress,
-      tokenID: { $ne: tokenID },
-      isAppropriate: true
-    })
-      .sort({ viewed: 'desc' })
-      .limit(10)
-      .select([
-        'thumbnailPath',
-        'supply',
-        'price',
-        'paymentToken',
-        'priceInUSD',
-        'tokenType',
-        'tokenID',
-        'tokenURI',
-        'name',
-        'imageURL',
-        'liked',
-        'contractAddress',
-        'isAppropriate',
-        'lastSalePrice',
-        'lastSalePricePaymentToken',
-        'lastSalePriceInUSD',
-        'saleEndsAt'
-      ]);
+    // let nfts = await NFTITEM.find({
+    //   contractAddress: contractAddress,
+    //   tokenID: { $ne: tokenID },
+    //   isAppropriate: true
+    // })
+    //   .sort({ viewed: 'desc' })
+    //   .limit(10)
+    //   .select([
+    //     'thumbnailPath',
+    //     'supply',
+    //     'price',
+    //     'paymentToken',
+    //     'priceInUSD',
+    //     'tokenType',
+    //     'tokenID',
+    //     'tokenURI',
+    //     'name',
+    //     'imageURL',
+    //     'liked',
+    //     'contractAddress',
+    //     'isAppropriate',
+    //     'lastSalePrice',
+    //     'lastSalePricePaymentToken',
+    //     'lastSalePriceInUSD',
+    //     'saleEndsAt'
+    //   ]);
     let hasUnlockable = await UnlockableContents.findOne({
       contractAddress: contractAddress,
       tokenID: tokenID
@@ -1197,7 +1190,7 @@ router.post('/getSingleItemDetails', async (req, res) => {
         listings,
         offers,
         history,
-        nfts,
+        // nfts,
         contentType,
         hasUnlockable
       }
