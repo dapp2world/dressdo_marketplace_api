@@ -393,87 +393,87 @@ const swaggerOptions = {
                 },
               },
             },
-            nfts: {
-              type: "array",
-              items: {
-                type: "object",
-                description:
-                  "A list of related NFTs within the same collection or contract.",
-                properties: {
-                  _id: {
-                    type: "string",
-                    description:
-                      "Unique identifier for the NFT in the database.",
-                  },
-                  thumbnailPath: {
-                    type: "string",
-                    description: "URL of the NFT’s thumbnail image.",
-                  },
-                  supply: {
-                    type: "number",
-                    description: "The total supply of this specific NFT.",
-                  },
-                  price: {
-                    type: "number",
-                    description:
-                      "The current price of the NFT in its original payment token.",
-                  },
-                  paymentToken: {
-                    type: "string",
-                    description: "The token used for the payment.",
-                  },
-                  priceInUSD: {
-                    type: "number",
-                    description: "The price of the NFT converted to USD.",
-                  },
-                  lastSalePrice: {
-                    type: "number",
-                    description:
-                      "The last recorded sale price in its original payment token.",
-                  },
-                  lastSalePricePaymentToken: {
-                    type: "string",
-                    description:
-                      "The token used for the last sale transaction.",
-                  },
-                  lastSalePriceInUSD: {
-                    type: "number",
-                    description: "The last sale price converted to USD.",
-                  },
-                  tokenType: {
-                    type: "number",
-                    description: "The type of token (e.g., 721, 1155).",
-                  },
-                  liked: {
-                    type: "number",
-                    description: "The number of likes received by the NFT.",
-                  },
-                  isAppropriate: {
-                    type: "boolean",
-                    description:
-                      "Indicates whether the NFT meets content guidelines.",
-                  },
-                  contractAddress: {
-                    type: "string",
-                    description:
-                      "The smart contract address associated with this NFT.",
-                  },
-                  tokenID: {
-                    type: "number",
-                    description: "The unique token ID within its contract.",
-                  },
-                  name: { type: "string", description: "The name of the NFT." },
-                  tokenURI: {
-                    type: "string",
-                    description: "The metadata URI of the NFT.",
-                  },
-                  imageURL: {
-                    type: "string",
-                    description: "The URL of the NFT’s primary image.",
-                  },
-                },
-              },
-            },
+            // nfts: {
+            //   type: "array",
+            //   items: {
+            //     type: "object",
+            //     description:
+            //       "A list of related NFTs within the same collection or contract.",
+            //     properties: {
+            //       _id: {
+            //         type: "string",
+            //         description:
+            //           "Unique identifier for the NFT in the database.",
+            //       },
+            //       thumbnailPath: {
+            //         type: "string",
+            //         description: "URL of the NFT’s thumbnail image.",
+            //       },
+            //       supply: {
+            //         type: "number",
+            //         description: "The total supply of this specific NFT.",
+            //       },
+            //       price: {
+            //         type: "number",
+            //         description:
+            //           "The current price of the NFT in its original payment token.",
+            //       },
+            //       paymentToken: {
+            //         type: "string",
+            //         description: "The token used for the payment.",
+            //       },
+            //       priceInUSD: {
+            //         type: "number",
+            //         description: "The price of the NFT converted to USD.",
+            //       },
+            //       lastSalePrice: {
+            //         type: "number",
+            //         description:
+            //           "The last recorded sale price in its original payment token.",
+            //       },
+            //       lastSalePricePaymentToken: {
+            //         type: "string",
+            //         description:
+            //           "The token used for the last sale transaction.",
+            //       },
+            //       lastSalePriceInUSD: {
+            //         type: "number",
+            //         description: "The last sale price converted to USD.",
+            //       },
+            //       tokenType: {
+            //         type: "number",
+            //         description: "The type of token (e.g., 721, 1155).",
+            //       },
+            //       liked: {
+            //         type: "number",
+            //         description: "The number of likes received by the NFT.",
+            //       },
+            //       isAppropriate: {
+            //         type: "boolean",
+            //         description:
+            //           "Indicates whether the NFT meets content guidelines.",
+            //       },
+            //       contractAddress: {
+            //         type: "string",
+            //         description:
+            //           "The smart contract address associated with this NFT.",
+            //       },
+            //       tokenID: {
+            //         type: "number",
+            //         description: "The unique token ID within its contract.",
+            //       },
+            //       name: { type: "string", description: "The name of the NFT." },
+            //       tokenURI: {
+            //         type: "string",
+            //         description: "The metadata URI of the NFT.",
+            //       },
+            //       imageURL: {
+            //         type: "string",
+            //         description: "The URL of the NFT’s primary image.",
+            //       },
+            //     },
+            //   },
+            // },
           },
         },
         CollectionInfoResponse: {
